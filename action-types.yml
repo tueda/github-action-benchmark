@@ -28,6 +28,8 @@ inputs:
     type: string
   ref:
     type: string
+  ref-repository:
+    type: string
   auto-push:
     type: boolean
   skip-fetch-gh-pages:
