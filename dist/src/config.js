@@ -203,6 +203,7 @@ async function configFromJobInput() {
     const name = core.getInput('name');
     const githubToken = core.getInput('github-token') || undefined;
     const ref = core.getInput('ref') || undefined;
+    const refRepository = core.getInput('ref-repository') || undefined;
     const autoPush = getBoolInput('auto-push');
     const skipFetchGhPages = getBoolInput('skip-fetch-gh-pages');
     const commentAlways = getBoolInput('comment-always');
@@ -260,6 +261,7 @@ async function configFromJobInput() {
         maxItemsInChart,
         failThreshold,
         ref,
+        refRepository,
     };
 }
 exports.configFromJobInput = configFromJobInput;
