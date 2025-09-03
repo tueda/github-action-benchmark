@@ -33,6 +33,9 @@ inputs:
   ref:
     description: 'optional Ref to use when finding commit'
     required: false
+  ref-repository:
+    description: 'Url to an optional different repository to use when finding commit'
+    required: false
   auto-push:
     description: 'Push GitHub Pages branch to remote automatically. This option requires github-token input'
     required: false

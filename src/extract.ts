@@ -2,6 +2,7 @@
 import { promises as fs } from 'fs';
 import * as github from '@actions/github';
 import { Config, ToolType } from './config';
+import * as git from './git';
 
 export interface BenchmarkResult {
     name: string;
@@ -286,7 +287,11 @@ async function getCommitFromGitHubAPIRequest(githubToken: string, ref?: string):
     };
 }
 
-async function getCommit(githubToken?: string, ref?: string): Promise<Commit> {
+async function getCommit(githubToken?: string, ref?: string, refRepository?: string): Promise<Commit> {
+    if (ref && refRepository) {
+        return getCommitFromRefRepository(ref, refRepository);
+    }
+
     if (github.context.payload.head_commit) {
         return github.context.payload.head_commit;
     }
@@ -308,6 +313,41 @@ async function getCommit(githubToken?: string, ref?: string): Promise<Commit> {
     }
 
     return getCommitFromGitHubAPIRequest(githubToken, ref);
+}
+
+async function getCommitFromRefRepository(ref: string, refRepository: string): Promise<Commit> {
+    // For now, refRepository is assumed to be in the form of a URL like:
+    // "https://github.com/benchmark-action/github-action-benchmark"
+    const temp_dir = await fs.mkdtemp('github-action-benchmark-');
+    try {
+        await git.cmd(['clone', `${refRepository}.git`, temp_dir]);
+        await git.cmd(['-C', temp_dir, 'checkout', ref]);
+
+        const [commitHash, authorName, authorEmail, committerName, committerEmail, commitMessage] = await Promise.all([
+            git.cmd(['-C', temp_dir, 'log', '-1', '--pretty=format:%H']),
+            git.cmd(['-C', temp_dir, 'log', '-1', '--pretty=format:%an']),
+            git.cmd(['-C', temp_dir, 'log', '-1', '--pretty=format:%ae']),
+            git.cmd(['-C', temp_dir, 'log', '-1', '--pretty=format:%cn']),
+            git.cmd(['-C', temp_dir, 'log', '-1', '--pretty=format:%ce']),
+            git.cmd(['-C', temp_dir, 'log', '-1', '--pretty=format:%B']),
+        ]);
+
+        return {
+            author: {
+                name: authorName,
+                email: authorEmail,
+            },
+            committer: {
+                name: committerName,
+                email: committerEmail,
+            },
+            id: commitHash,
+            message: commitMessage,
+            url: `${refRepository}/commit/${commitHash}`,
+        };
+    } finally {
+        await fs.rmdir(temp_dir, { recursive: true });
+    }
 }
 
 function extractCargoResult(output: string): BenchmarkResult[] {
@@ -692,7 +732,7 @@ function extractLuauBenchmarkResult(output: string): BenchmarkResult[] {
 
 export async function extractResult(config: Config): Promise<Benchmark> {
     const output = await fs.readFile(config.outputFilePath, 'utf8');
-    const { tool, githubToken, ref } = config;
+    const { tool, githubToken, ref, refRepository } = config;
     let benches: BenchmarkResult[];
 
     switch (tool) {
@@ -740,7 +780,7 @@ export async function extractResult(config: Config): Promise<Benchmark> {
         throw new Error(`No benchmark result was found in ${config.outputFilePath}. Benchmark output was '${output}'`);
     }
 
-    const commit = await getCommit(githubToken, ref);
+    const commit = await getCommit(githubToken, ref, refRepository);
 
     return {
         commit,
